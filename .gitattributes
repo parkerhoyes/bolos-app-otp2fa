@@ -1,0 +1,17 @@
+# Treat all files as binaries unless otherwise declared
+* -text -diff
+
+# Explicitly declare text files
+#     Git files
+.gitattributes text diff
+.gitignore text diff
+.gitmodules text diff
+
+#     Source files
+*.c text diff
+*.h text diff
+Makefile text diff
+
+#     Informational files
+*.md  text diff
+*.txt text diff
