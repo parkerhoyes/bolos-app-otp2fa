@@ -62,12 +62,12 @@ typedef struct app_room_keys_inactive_t {
 
 static void app_room_keys_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
 static void app_room_keys_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static bool app_room_keys_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
+static void app_room_keys_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
 static void app_room_keys_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_keys_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer);
+static void app_room_keys_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 static uint8_t app_room_keys_elem_size(const bui_menu_menu_t *menu, uint8_t i);
-static void app_room_keys_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y);
+static void app_room_keys_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -114,15 +114,19 @@ static void app_room_keys_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
 	bui_room_push(ctx, &inactive, sizeof(inactive));
 }
 
-static bool app_room_keys_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
-	return bui_menu_animate(&APP_ROOM_KEYS_ACTIVE.menu, elapsed);
+static void app_room_keys_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+	if (bui_menu_animate(&APP_ROOM_KEYS_ACTIVE.menu, elapsed))
+		app_disp_invalidate();
 }
 
 static void app_room_keys_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
 	if (left && right) {
 		uint8_t i = bui_menu_get_focused(&APP_ROOM_KEYS_ACTIVE.menu);
 		if (i == 0) {
-			bui_room_enter(ctx, &app_rooms_newkey, NULL, 0);
+			if (app_key_count() < APP_N_KEYS_MAX)
+				bui_room_enter(ctx, &app_rooms_newkey, NULL, 0);
+			else
+				bui_room_enter(ctx, &app_rooms_keysfull, NULL, 0);
 		} else if (i == APP_ROOM_KEYS_ACTIVE.n_keys + 1) {
 			bui_room_exit(ctx);
 		} else {
@@ -139,8 +143,8 @@ static void app_room_keys_button(bui_room_ctx_t *ctx, bui_room_t *room, bool lef
 	}
 }
 
-static void app_room_keys_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer) {
-	bui_menu_draw(&APP_ROOM_KEYS_ACTIVE.menu, buffer);
+static void app_room_keys_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_menu_draw(&APP_ROOM_KEYS_ACTIVE.menu, bui_ctx);
 }
 
 static uint8_t app_room_keys_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -150,16 +154,16 @@ static uint8_t app_room_keys_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
 		return 10;
 }
 
-static void app_room_keys_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y) {
+static void app_room_keys_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	if (i == 0) {
-		bui_font_draw_string(buffer, "Add Key", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Add Key", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 	} else if (i == APP_ROOM_KEYS_ACTIVE.n_keys + 1) {
-		bui_font_draw_string(buffer, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 	} else {
 		char name[APP_KEY_NAME_MAX + 1];
-		app_key_t *key = &N_app_persist.keys[APP_ROOM_KEYS_ACTIVE.keys[i - 1]];
+		app_key_t *key = app_get_key(APP_ROOM_KEYS_ACTIVE.keys[i - 1]);
 		os_memcpy(name, key->name.buff, key->name.size);
 		name[key->name.size] = '\0';
-		bui_font_draw_string(buffer, name, 64, y + 1, BUI_DIR_TOP, bui_font_lucida_console_8);
+		bui_font_draw_string(bui_ctx, name, 64, y + 1, BUI_DIR_TOP, bui_font_lucida_console_8);
 	}
 }

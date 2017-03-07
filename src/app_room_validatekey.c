@@ -24,15 +24,18 @@
 #include "app_rooms.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "bui.h"
-#include "bui_bkb.h"
+#include "bui_font.h"
 #include "bui_room.h"
 
 #include "app.h"
+#include "app_otp.h"
 
-#define APP_ROOM_EDITKEYCOUNTER_ACTIVE (*((app_room_editkeycounter_active_t*) app_room_ctx.stack_ptr - 1))
-#define APP_ROOM_EDITKEYCOUNTER_ARGS (*((app_room_editkeycounter_args_t*) app_room_ctx.frame_ptr))
+#define APP_ROOM_VALIDATEKEY_ARGS (*((app_room_validatekey_args_t*) app_room_ctx.frame_ptr))
+#define APP_ROOM_VALIDATEKEY_ACTIVE (*((app_room_validatekey_active_t*) app_room_ctx.stack_ptr - 1))
+#define APP_ROOM_VALIDATEKEY_KEY (*app_get_key(APP_ROOM_VALIDATEKEY_ARGS.key_i))
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -40,10 +43,9 @@
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-typedef struct app_room_editkeycounter_active_t {
-	bui_bkb_bkb_t bkb;
-	char counter_buff[20];
-} app_room_editkeycounter_active_t;
+typedef struct app_room_validatekey_active_t {
+	char auth_code[6]; // The 6-digit OTP code as a string
+} app_room_validatekey_active_t;
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -51,11 +53,10 @@ typedef struct app_room_editkeycounter_active_t {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_editkeycounter_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_editkeycounter_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_editkeycounter_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
-static void app_room_editkeycounter_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_editkeycounter_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_validatekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
+static void app_room_validatekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
+static void app_room_validatekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
+static void app_room_validatekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -63,12 +64,12 @@ static void app_room_editkeycounter_draw(bui_room_ctx_t *ctx, const bui_room_t *
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-const bui_room_t app_rooms_editkeycounter = {
-	.enter = app_room_editkeycounter_enter,
-	.exit = app_room_editkeycounter_exit,
-	.tick = app_room_editkeycounter_tick,
-	.button = app_room_editkeycounter_button,
-	.draw = app_room_editkeycounter_draw,
+const bui_room_t app_rooms_validatekey = {
+	.enter = app_room_validatekey_enter,
+	.exit = app_room_validatekey_exit,
+	.tick = NULL,
+	.button = app_room_validatekey_button,
+	.draw = app_room_validatekey_draw,
 };
 
 //----------------------------------------------------------------------------//
@@ -77,38 +78,38 @@ const bui_room_t app_rooms_editkeycounter = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_editkeycounter_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	bui_room_alloc(ctx, sizeof(app_room_editkeycounter_active_t));
-	uint8_t size = app_dec_encode(*APP_ROOM_EDITKEYCOUNTER_ARGS.counter, APP_ROOM_EDITKEYCOUNTER_ACTIVE.counter_buff);
-	bui_bkb_init(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb, bui_bkb_layout_numeric, sizeof(bui_bkb_layout_numeric),
-			APP_ROOM_EDITKEYCOUNTER_ACTIVE.counter_buff, size, sizeof(APP_ROOM_EDITKEYCOUNTER_ACTIVE.counter_buff),
-			true);
+static void app_room_validatekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+	bui_room_alloc(ctx, sizeof(app_room_validatekey_active_t));
+	const app_key_t *key = &APP_ROOM_VALIDATEKEY_KEY;
+	app_otp_6digit(key->secret.buff, key->secret.size, 0, APP_ROOM_VALIDATEKEY_ACTIVE.auth_code);
 	app_disp_invalidate();
 }
 
-static void app_room_editkeycounter_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	uint8_t size = bui_bkb_get_type_buff_size(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb);
-	*APP_ROOM_EDITKEYCOUNTER_ARGS.counter = app_dec_decode(APP_ROOM_EDITKEYCOUNTER_ACTIVE.counter_buff, size);
+static void app_room_validatekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
 	bui_room_dealloc_frame(ctx);
 }
 
-static void app_room_editkeycounter_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
-	if (bui_bkb_animate(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb, elapsed))
-		app_disp_invalidate();
-}
-
-static void app_room_editkeycounter_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left && right) {
+static void app_room_validatekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
+	if (left && right)
 		bui_room_exit(ctx);
-	} else if (left) {
-		bui_bkb_choose(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb, BUI_DIR_LEFT);
-		app_disp_invalidate();
-	} else {
-		bui_bkb_choose(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb, BUI_DIR_RIGHT);
-		app_disp_invalidate();
-	}
 }
 
-static void app_room_editkeycounter_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_bkb_draw(&APP_ROOM_EDITKEYCOUNTER_ACTIVE.bkb, bui_ctx);
+static void app_room_validatekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	{
+		char otp_text[8];
+		for (uint8_t i = 0; i < 3; i++)
+			otp_text[i] = APP_ROOM_VALIDATEKEY_ACTIVE.auth_code[i];
+		otp_text[3] = ' ';
+		for (uint8_t i = 3; i < 6; i++)
+			otp_text[i + 1] = APP_ROOM_VALIDATEKEY_ACTIVE.auth_code[i];
+		otp_text[7] = '\0';
+		bui_font_draw_string(bui_ctx, otp_text, 64, 6, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	}
+	{
+		char name_text[APP_KEY_NAME_MAX + 1];
+		const app_key_t *key = &APP_ROOM_VALIDATEKEY_KEY;
+		os_memcpy(name_text, key->name.buff, key->name.size);
+		name_text[key->name.size] = '\0';
+		bui_font_draw_string(bui_ctx, name_text, 64, 26, BUI_DIR_BOTTOM, bui_font_lucida_console_8);
+	}
 }

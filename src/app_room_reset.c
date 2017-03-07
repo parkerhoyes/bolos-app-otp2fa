@@ -41,7 +41,7 @@
 
 static void app_room_reset_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
 static void app_room_reset_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer);
+static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -76,11 +76,9 @@ static void app_room_reset_button(bui_room_ctx_t *ctx, bui_room_t *room, bool le
 	}
 }
 
-static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer) {
-	bui_font_draw_string(&app_disp_buffer, "Reset all", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-	bui_font_draw_string(&app_disp_buffer, "app data?", 64, 27, BUI_DIR_BOTTOM, bui_font_open_sans_extrabold_11);
-	bui_draw_bitmap(&app_disp_buffer, BUI_BITMAP_ICON_CROSS, 0, 0, 3, 12, BUI_BITMAP_ICON_CROSS.w,
-			BUI_BITMAP_ICON_CROSS.h);
-	bui_draw_bitmap(&app_disp_buffer, BUI_BITMAP_ICON_CHECK, 0, 0, 117, 13, BUI_BITMAP_ICON_CHECK.w,
-			BUI_BITMAP_ICON_CHECK.h);
+static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_font_draw_string(bui_ctx, "Reset all", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_font_draw_string(bui_ctx, "app data?", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CROSS, 3, 12);
+	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CHECK, 117, 13);
 }

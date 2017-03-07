@@ -47,9 +47,10 @@
  * Internal Non-const (RAM) Variable Definitions
  */
 
-static uint8_t app_room_ctx_stack[APP_ROOM_CTX_STACK_SIZE];
-static int8_t app_disp_progress;
+static uint8_t app_room_ctx_stack[APP_ROOM_CTX_STACK_SIZE] __attribute__((aligned(4)));
+static bool app_seproxy_ready;
 static bool app_disp_invalidated; // true if the display needs to be redrawn
+static app_key_slot_t *app_persist_keys;
 
 /*
  * Internal Const (NVRAM) Variable Definitions
@@ -62,6 +63,19 @@ static const app_key_t app_zeroed_key = {};
 //                       Internal Function Declarations                       //
 //                                                                            //
 //----------------------------------------------------------------------------//
+
+/*
+ * Compare two strings lexicographically.
+ *
+ * Args:
+ *     str1: the first string; null-terminator is not required
+ *     str1_len: the number of characters in str1
+ *     str2: the second string; null-terminator is not required
+ *     str2_len: the number of characters in str2
+ * Returns:
+ *     1 if str1 > str2, 0 if str1 == str2, -1 if str1 < str2
+ */
+static int8_t app_strcmp(const char *str1, uint8_t str1_len, const char *str2, uint8_t str2_len);
 
 static void app_display();
 
@@ -77,8 +91,8 @@ static void app_persist_init();
  * External Non-const (RAM) Variable Definitions
  */
 
+bui_ctx_t app_bui_ctx;
 bui_room_ctx_t app_room_ctx;
-bui_bitmap_128x32_t app_disp_buffer;
 
 /*
  * External Const (NVRAM) Variable Definitions
@@ -113,8 +127,10 @@ void app_init() {
 	io_seproxyhal_spi_send(G_io_seproxyhal_spi_buffer, 5);
 
 	// Initialize global vars
-	app_disp_progress = -1;
+	app_seproxy_ready = true;
 	app_disp_invalidated = true;
+	app_persist_keys = (app_key_slot_t*) &N_app_persist.key_data[(64 - ((uintptr_t) N_app_persist.key_data & 63)) & 63];
+	bui_ctx_init(&app_bui_ctx);
 	if (!N_app_persist.init)
 		app_persist_init();
 
@@ -137,17 +153,15 @@ void app_event_button_push(unsigned int button_mask, unsigned int button_mask_co
 }
 
 void app_event_ticker() {
-	if (bui_room_current_tick(&app_room_ctx, APP_TICKER_INTERVAL))
-		app_disp_invalidated = true;
-	if (app_disp_invalidated && app_disp_progress == -1) {
+	bui_room_current_tick(&app_room_ctx, APP_TICKER_INTERVAL);
+	if (app_disp_invalidated) {
 		app_display();
 		app_disp_invalidated = false;
 	}
 }
 
 void app_event_display_processed() {
-	if (app_disp_progress != -1)
-		app_disp_progress = bui_display(&app_disp_buffer, app_disp_progress);
+	app_seproxy_ready = !bui_ctx_display(&app_bui_ctx);
 }
 
 void app_disp_invalidate() {
@@ -250,20 +264,24 @@ uint32_t app_find_byte(uint8_t *arr, uint32_t size, uint8_t b) {
 
 uint8_t app_key_new(const app_key_t *src) {
 	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++) {
-		if (N_app_persist.keys[i].exists)
+		if (app_get_key(i)->exists)
 			continue;
-		nvm_write(&N_app_persist.keys[i], (void*) src, sizeof(*src));
+		nvm_write(app_get_key(i), (void*) src, sizeof(*src));
 		return i;
 	}
 	return 0xFF;
 }
 
+app_key_t* app_get_key(uint8_t i) {
+	return &app_persist_keys[i].key;
+}
+
 void app_key_delete(uint8_t i) {
-	nvm_write(&N_app_persist.keys[i], (void*) &app_zeroed_key, sizeof(app_zeroed_key));
+	nvm_write(app_get_key(i), (void*) &app_zeroed_key, sizeof(app_zeroed_key));
 }
 
 bool app_key_has_name(uint8_t i, const char *src, uint8_t size) {
-	app_key_name_t name = N_app_persist.keys[i].name;
+	app_key_name_t name = app_get_key(i)->name;
 	if (name.size != size)
 		return false;
 	for (uint8_t j = 0; j < size; j++) {
@@ -278,7 +296,7 @@ void app_key_set_name(uint8_t i, char *src, uint8_t size) {
 	name.size = size;
 	os_memcpy(name.buff, src, size);
 	os_memset(&name.buff[size], 0, APP_KEY_NAME_MAX - size); // To prevent stack garbage from being written to NVRAM
-	nvm_write(&N_app_persist.keys[i].name, &name, sizeof(name));
+	nvm_write(&app_get_key(i)->name, &name, sizeof(name));
 }
 
 void app_key_set_secret(uint8_t i, uint8_t *src, uint8_t size) {
@@ -286,37 +304,46 @@ void app_key_set_secret(uint8_t i, uint8_t *src, uint8_t size) {
 	secret.size = size;
 	os_memcpy(secret.buff, src, size);
 	os_memset(&secret.buff[size], 0, APP_KEY_SECRET_MAX - size); // To prevent stack garbage from being written to NVRAM
-	nvm_write(&N_app_persist.keys[i].secret, &secret, sizeof(secret));
+	nvm_write(&app_get_key(i)->secret, &secret, sizeof(secret));
 }
 
 void app_key_set_counter(uint8_t i, uint64_t src) {
-	nvm_write(&N_app_persist.keys[i].counter, &src, sizeof(src));
+	nvm_write(&app_get_key(i)->counter, &src, sizeof(src));
 }
 
 uint8_t app_key_count() {
 	uint8_t count = 0;
 	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++) {
-		if (N_app_persist.keys[i].exists)
+		if (app_get_key(i)->exists)
 			count += 1;
 	}
 	return count;
 }
 
 uint8_t app_keys_sort(uint8_t dest[APP_N_KEYS_MAX]) {
-	// TODO Make this an alphabetic sort
 	uint8_t n = 0;
 	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++) {
-		if (N_app_persist.keys[i].exists)
+		const app_key_t *key = app_get_key(i);
+		if (!key->exists)
+			continue;
+		if (n == 0) {
 			dest[n++] = i;
-	}
-	return n;
-}
-
-uint8_t app_key_sort(uint8_t dest[APP_N_KEYS_MAX]) {
-	uint8_t n = 0;
-	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++) {
-		if (N_app_persist.keys[i].exists)
-			dest[n++] = i;
+			continue;
+		}
+		for (uint8_t j = 0; j < n; j++) {
+			const app_key_name_t *name1 = &key->name;
+			const app_key_name_t *name2 = &app_get_key(dest[j])->name;
+			int8_t cmp = app_strcmp(name1->buff, name1->size, name2->buff, name2->size);
+			if (cmp < 0) {
+				os_memmove(&dest[j + 1], &dest[j], n - j);
+				dest[j] = i;
+				n += 1;
+				goto sort_next_key;
+			}
+		}
+		dest[n++] = i;
+	sort_next_key:
+		continue;
 	}
 	return n;
 }
@@ -324,7 +351,7 @@ uint8_t app_key_sort(uint8_t dest[APP_N_KEYS_MAX]) {
 void app_persist_wipe() {
 	// TODO There must be a better way to do this...
 	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++)
-		nvm_write(&N_app_persist.keys[i], (void*) &app_zeroed_key, sizeof(app_zeroed_key));
+		nvm_write(app_get_key(i), (void*) &app_zeroed_key, sizeof(app_zeroed_key));
 }
 
 //----------------------------------------------------------------------------//
@@ -333,13 +360,26 @@ void app_persist_wipe() {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
+static int8_t app_strcmp(const char *str1, uint8_t str1_len, const char *str2, uint8_t str2_len) {
+	uint8_t min_len = str1_len < str2_len ? str1_len : str2_len;
+	for (uint8_t i = 0; i < min_len; i++) {
+		if (str1[i] < str2[i])
+			return -1;
+		if (str1[i] > str2[i])
+			return 1;
+	}
+	if (str1_len > str2_len)
+		return 1;
+	if (str1_len < str2_len)
+		return -1;
+	return 0;
+}
+
 static void app_display() {
-	bui_fill(&app_disp_buffer, false);
-	bui_room_current_draw(&app_room_ctx, &app_disp_buffer);
-	if (app_disp_progress == -1)
-		app_disp_progress = bui_display(&app_disp_buffer, 0);
-	else
-		app_disp_progress = 0;
+	bui_ctx_fill(&app_bui_ctx, false);
+	bui_room_current_draw(&app_room_ctx, &app_bui_ctx);
+	if (app_seproxy_ready)
+		app_seproxy_ready = !bui_ctx_display(&app_bui_ctx);
 }
 
 static void app_persist_init() {

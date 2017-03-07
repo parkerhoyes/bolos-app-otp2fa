@@ -72,12 +72,12 @@ static const uint8_t app_room_main_bitmap_icon_bitmap[] = {
 
 static void app_room_main_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
 static void app_room_main_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static bool app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
+static void app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
 static void app_room_main_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer);
+static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i);
-static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y);
+static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -121,8 +121,9 @@ static void app_room_main_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
 	bui_room_push(ctx, &inactive, sizeof(inactive));
 }
 
-static bool app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
-	return bui_menu_animate(&APP_ROOM_MAIN_ACTIVE.menu, elapsed);
+static void app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+	if (bui_menu_animate(&APP_ROOM_MAIN_ACTIVE.menu, elapsed))
+		app_disp_invalidate();
 }
 
 static void app_room_main_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
@@ -147,8 +148,8 @@ static void app_room_main_button(bui_room_ctx_t *ctx, bui_room_t *room, bool lef
 	}
 }
 
-static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer) {
-	bui_menu_draw(&APP_ROOM_MAIN_ACTIVE.menu, buffer);
+static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_menu_draw(&APP_ROOM_MAIN_ACTIVE.menu, bui_ctx);
 }
 
 static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -162,23 +163,21 @@ static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
 	return 0;
 }
 
-static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y) {
+static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0:
-		bui_draw_bitmap(buffer, APP_ROOM_MAIN_BITMAP_ICON, 0, 0, 8, y + 2, APP_ROOM_MAIN_BITMAP_ICON.w,
-				APP_ROOM_MAIN_BITMAP_ICON.h);
-		bui_font_draw_string(buffer, "OTP 2FA App", 32, y + 10, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
+		bui_ctx_draw_mbitmap_full(bui_ctx, APP_ROOM_MAIN_BITMAP_ICON, 8, y + 2);
+		bui_font_draw_string(bui_ctx, "OTP 2FA App", 32, y + 10, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
 		break;
 	case 1:
-		bui_font_draw_string(buffer, "Manage Keys", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Manage Keys", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 2:
-		bui_font_draw_string(buffer, "Settings", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Settings", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 3:
-		bui_draw_bitmap(buffer, BUI_BITMAP_BADGE_DASHBOARD, 0, 0, 29, y + 2, BUI_BITMAP_BADGE_DASHBOARD.w,
-				BUI_BITMAP_BADGE_DASHBOARD.h);
-		bui_font_draw_string(buffer, "Quit app", 52, y + 9, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
+		bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_BADGE_DASHBOARD, 29, y + 2);
+		bui_font_draw_string(bui_ctx, "Quit app", 52, y + 9, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
 		break;
 	}
 }

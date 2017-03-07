@@ -52,9 +52,9 @@ typedef struct app_room_editkeyname_active_t {
 
 static void app_room_editkeyname_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
 static void app_room_editkeyname_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static bool app_room_editkeyname_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
+static void app_room_editkeyname_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
 static void app_room_editkeyname_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_editkeyname_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer);
+static void app_room_editkeyname_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -89,8 +89,9 @@ static void app_room_editkeyname_exit(bui_room_ctx_t *ctx, bui_room_t *room, boo
 	bui_room_dealloc_frame(ctx);
 }
 
-static bool app_room_editkeyname_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
-	return bui_bkb_animate(&APP_ROOM_EDITKEYNAME_ACTIVE.bkb, elapsed);
+static void app_room_editkeyname_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+	if (bui_bkb_animate(&APP_ROOM_EDITKEYNAME_ACTIVE.bkb, elapsed))
+		app_disp_invalidate();
 }
 
 static void app_room_editkeyname_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
@@ -105,6 +106,6 @@ static void app_room_editkeyname_button(bui_room_ctx_t *ctx, bui_room_t *room, b
 	}
 }
 
-static void app_room_editkeyname_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer) {
-	bui_bkb_draw(&APP_ROOM_EDITKEYNAME_ACTIVE.bkb, buffer);
+static void app_room_editkeyname_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_bkb_draw(&APP_ROOM_EDITKEYNAME_ACTIVE.bkb, bui_ctx);
 }

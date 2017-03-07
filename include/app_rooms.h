@@ -24,35 +24,6 @@
 #ifndef APP_ROOMS_H_
 #define APP_ROOMS_H_
 
-/*
- * Main Menu Layout:
- * - Title Screen, full-size
- * - Keys (selecting goes to Keys Menu), full-size
- * - Settings (selecting goes to Settings Menu), full-size
- * - Quit App (selecting quits), full-size
- *
- * Keys Menu Layout:
- * - Add New Key (selecting goes to New Key Menu), full-size
- * - *list of keys* (selecting goes to Manage Key Menu for the selected key), each 10px
- * - Back (selecting goes to Main Menu, focused on Keys Menu), full-size
- *
- * New Key Menu Layout:
- * - Key Name (selecting brings up the BKB to edit the entered name), full-size
- * - Key Secret (selecting brings up the specialized BKB to edit the entered secret), full-size
- * - Done (selecting goes to Keys Menu, focused on the new key), full-size
- *
- * Manage Key Menu Layout:
- * - Authenticate (selecting displays a new code that is retained until the user exits the menu), full-size
- * - Key Name (selecting brings up the BKB to edit the entered name), full-size
- * - Edit Counter (selecting brings up the BKB to edit the counter), full-size
- * - Delete Key (selecting brings up the Delete Key screen), full-size
- * - Back (selecting goes to Keys Menu, focused on the original key), full-size
- *
- * Settings Menu Layout:
- * - Reset (selecting brings up the Reset screen), full-size
- * - Back (selecting goes to Main Menu, focused on Settings), full-size
- */
-
 #include <stdint.h>
 
 #include "bui_room.h"
@@ -83,6 +54,10 @@ typedef struct __attribute__((aligned(4))) app_room_editkeycounter_args_t {
 	uint64_t *counter;
 } app_room_editkeycounter_args_t;
 
+typedef struct __attribute__((aligned(4))) app_room_validatekey_args_t {
+	uint8_t key_i; // The index of the key to be validated
+} app_room_validatekey_args_t;
+
 typedef struct app_room_deletekey_args_t {
 	uint8_t key_i; // The index of the key to be deleted, if the user confirms the deletion
 } app_room_deletekey_args_t;
@@ -96,12 +71,15 @@ typedef struct app_room_deletekey_args_t {
 extern const bui_room_t app_rooms_main;
 extern const bui_room_t app_rooms_keys;
 extern const bui_room_t app_rooms_newkey;
+extern const bui_room_t app_rooms_keysfull;
 extern const bui_room_t app_rooms_managekey;
 extern const bui_room_t app_rooms_editkeyname;
 extern const bui_room_t app_rooms_editkeysecret;
 extern const bui_room_t app_rooms_editkeycounter;
+extern const bui_room_t app_rooms_validatekey;
 extern const bui_room_t app_rooms_deletekey;
 extern const bui_room_t app_rooms_settings;
 extern const bui_room_t app_rooms_reset;
+extern const bui_room_t app_rooms_about;
 
 #endif

@@ -32,11 +32,15 @@
 #include "bui.h"
 #include "bui_room.h"
 
-#define APP_ROOM_CTX_STACK_SIZE 512 // TODO Pick a better stack size
+#define APP_VER_MAJOR 0
+#define APP_VER_MINOR 0
+#define APP_VER_PATCH 0
+
+#define APP_ROOM_CTX_STACK_SIZE 512
 #define APP_KEY_NAME_MAX 20 // In characters
 #define APP_KEY_SECRET_MAX 20 // In bytes
 #define APP_KEY_SECRET_ENCODED_MAX ((APP_KEY_SECRET_MAX * 8 + 5 - 1) / 5) // In characters
-#define APP_N_KEYS_MAX 20
+#define APP_N_KEYS_MAX 64
 
 #define N_app_persist (*(app_persist_t*) PIC(&N_app_persist_real))
 
@@ -63,10 +67,17 @@ typedef struct app_key_t {
 	app_key_secret_t secret;
 } app_key_t;
 
+typedef struct app_key_slot_t {
+	app_key_t key;
+	uint8_t pad[64 - sizeof(app_key_t)]; // Padding to assure sizeof(app_key_slot_t) == 64
+} app_key_slot_t;
+
+_Static_assert(sizeof(app_key_slot_t) == 64, "sizeof(app_key_slot_t) must be 64");
+
 // Persistent storage memory layout
 typedef struct app_persist_t {
-	app_key_t keys[APP_N_KEYS_MAX];
 	bool init; // true if storage has been initialized, false otherwise
+	uint8_t key_data[63 + sizeof(app_key_slot_t) * APP_N_KEYS_MAX];
 } app_persist_t;
 
 //----------------------------------------------------------------------------//
@@ -79,8 +90,8 @@ typedef struct app_persist_t {
  * External Non-const (RAM) Variable Declarations
  */
 
+extern bui_ctx_t app_bui_ctx;
 extern bui_room_ctx_t app_room_ctx;
-extern bui_bitmap_128x32_t app_disp_buffer;
 
 /*
  * External Const (NVRAM) Variable Declarations
@@ -165,6 +176,8 @@ uint32_t app_find_byte(uint8_t *arr, uint32_t size, uint8_t b);
  */
 uint8_t app_key_new(const app_key_t *src);
 
+app_key_t* app_get_key(uint8_t i);
+
 /*
  * Delete a key stored in N_app_persist at the specified index.
  *
@@ -184,16 +197,6 @@ void app_key_set_counter(uint8_t i, uint64_t src);
 uint8_t app_key_count();
 
 /*
- * Sort all keys in N_app_persist.keys, storing the indexes of the sorted keys in the specified array.
- *
- * Args:
- *     dest: the array in which to store the sorted indices
- * Returns:
- *     the number of indices stored in dest
- */
-uint8_t app_keys_sort(uint8_t dest[APP_N_KEYS_MAX]);
-
-/*
  * Sort all keys in N_app_persist.keys by their names, storing the indexes of the sorted keys in the specified array.
  *
  * Args:
@@ -201,7 +204,7 @@ uint8_t app_keys_sort(uint8_t dest[APP_N_KEYS_MAX]);
  * Returns:
  *     the number of indices stored in dest
  */
-uint8_t app_key_sort(uint8_t dest[APP_N_KEYS_MAX]);
+uint8_t app_keys_sort(uint8_t dest[APP_N_KEYS_MAX]);
 
 void app_persist_wipe();
 

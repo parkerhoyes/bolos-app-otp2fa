@@ -39,7 +39,7 @@
 
 #define APP_ROOM_MANAGEKEY_ACTIVE (*((app_room_managekey_active_t*) app_room_ctx.stack_ptr - 1))
 #define APP_ROOM_MANAGEKEY_PERSIST (*((app_room_managekey_persist_t*) app_room_ctx.frame_ptr))
-#define APP_ROOM_MANAGEKEY_KEY (N_app_persist.keys[APP_ROOM_MANAGEKEY_PERSIST.key_i])
+#define APP_ROOM_MANAGEKEY_KEY (*app_get_key(APP_ROOM_MANAGEKEY_PERSIST.key_i))
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -73,12 +73,12 @@ typedef struct app_room_managekey_inactive_t {
 
 static void app_room_managekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
 static void app_room_managekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static bool app_room_managekey_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
+static void app_room_managekey_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
 static void app_room_managekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_managekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer);
+static void app_room_managekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 static uint8_t app_room_managekey_elem_size(const bui_menu_menu_t *menu, uint8_t i);
-static void app_room_managekey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y);
+static void app_room_managekey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -106,7 +106,7 @@ static void app_room_managekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool
 		app_room_managekey_args_t args;
 		bui_room_pop(ctx, &args, sizeof(args));
 		bui_room_alloc(ctx, sizeof(app_room_managekey_persist_t) + sizeof(app_room_managekey_active_t));
-		if (!N_app_persist.keys[args.key_i].exists) {
+		if (!app_get_key(args.key_i)->exists) {
 			bui_room_exit(ctx);
 			return;
 		}
@@ -140,7 +140,7 @@ static void app_room_managekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool
 	APP_ROOM_MANAGEKEY_ACTIVE.menu.elem_size_callback = app_room_managekey_elem_size;
 	APP_ROOM_MANAGEKEY_ACTIVE.menu.elem_draw_callback = app_room_managekey_elem_draw;
 	APP_ROOM_MANAGEKEY_ACTIVE.has_auth_code = false;
-	bui_menu_init(&APP_ROOM_MANAGEKEY_ACTIVE.menu, 5, inactive.focus, true);
+	bui_menu_init(&APP_ROOM_MANAGEKEY_ACTIVE.menu, 6, inactive.focus, true);
 	app_disp_invalidate();
 }
 
@@ -155,8 +155,9 @@ static void app_room_managekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool 
 	}
 }
 
-static bool app_room_managekey_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
-	return bui_menu_animate(&APP_ROOM_MANAGEKEY_ACTIVE.menu, elapsed);
+static void app_room_managekey_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+	if (bui_menu_animate(&APP_ROOM_MANAGEKEY_ACTIVE.menu, elapsed))
+		app_disp_invalidate();
 }
 
 static void app_room_managekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
@@ -182,11 +183,16 @@ static void app_room_managekey_button(bui_room_ctx_t *ctx, bui_room_t *room, boo
 			bui_room_enter(ctx, &app_rooms_editkeycounter, &args, sizeof(args));
 		} break;
 		case 3: {
+			app_room_validatekey_args_t args;
+			args.key_i = APP_ROOM_MANAGEKEY_PERSIST.key_i;
+			bui_room_enter(ctx, &app_rooms_validatekey, &args, sizeof(args));
+		} break;
+		case 4: {
 			app_room_deletekey_args_t args;
 			args.key_i = APP_ROOM_MANAGEKEY_PERSIST.key_i;
 			bui_room_enter(ctx, &app_rooms_deletekey, &args, sizeof(args));
 		} break;
-		case 4:
+		case 5:
 			bui_room_exit(ctx);
 			break;
 		}
@@ -199,8 +205,8 @@ static void app_room_managekey_button(bui_room_ctx_t *ctx, bui_room_t *room, boo
 	}
 }
 
-static void app_room_managekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_bitmap_128x32_t *buffer) {
-	bui_menu_draw(&APP_ROOM_MANAGEKEY_ACTIVE.menu, buffer);
+static void app_room_managekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_menu_draw(&APP_ROOM_MANAGEKEY_ACTIVE.menu, bui_ctx);
 }
 
 static uint8_t app_room_managekey_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -210,45 +216,50 @@ static uint8_t app_room_managekey_elem_size(const bui_menu_menu_t *menu, uint8_t
 		case 2: return 25;
 		case 3: return 15;
 		case 4: return 15;
+		case 5: return 15;
 	}
 	// Impossible case
 	return 0;
 }
 
-static void app_room_managekey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_bitmap_128x32_t *buffer, int16_t y) {
+static void app_room_managekey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0: {
-		bui_font_draw_string(buffer, "Authenticate", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Authenticate", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		char text[12];
 		if (APP_ROOM_MANAGEKEY_ACTIVE.has_auth_code) {
-			for (uint8_t i = 0; i < 6; i++) {
-				text[i * 2] = APP_ROOM_MANAGEKEY_ACTIVE.auth_code[i];
-				text[i * 2 + 1] = ' ';
-			}
-			text[11] = '\0';
+			for (uint8_t i = 0; i < 3; i++)
+				text[i] = APP_ROOM_MANAGEKEY_ACTIVE.auth_code[i];
+			text[3] = ' ';
+			for (uint8_t i = 3; i < 6; i++)
+				text[i + 1] = APP_ROOM_MANAGEKEY_ACTIVE.auth_code[i];
+			text[7] = '\0';
 		} else {
 			os_memcpy(text, "- - - - - -", 12);
 		}
-		bui_font_draw_string(buffer, text, 64, y + 15, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 	} break;
 	case 1: {
-		bui_font_draw_string(buffer, "Key Name:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Key Name:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		char text[APP_KEY_NAME_MAX + 1];
 		os_memcpy(text, APP_ROOM_MANAGEKEY_PERSIST.name_buff, APP_ROOM_MANAGEKEY_PERSIST.name_size);
 		text[APP_ROOM_MANAGEKEY_PERSIST.name_size] = '\0';
-		bui_font_draw_string(buffer, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
+		bui_font_draw_string(bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
 	} break;
 	case 2: {
-		bui_font_draw_string(buffer, "Key Counter:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Key Counter:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		char text[20 + 1];
 		text[app_dec_encode(APP_ROOM_MANAGEKEY_PERSIST.counter, text)] = '\0';
-		bui_font_draw_string(buffer, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
+		bui_font_draw_string(bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
 	} break;
 	case 3:
-		bui_font_draw_string(buffer, "Delete Key", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Validate Key", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 4:
-		bui_font_draw_string(buffer, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(bui_ctx, "Delete Key", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		break;
+	case 5:
+		bui_font_draw_string(bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	}
 }

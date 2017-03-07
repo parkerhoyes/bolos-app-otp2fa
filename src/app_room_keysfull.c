@@ -32,19 +32,15 @@
 
 #include "app.h"
 
-#define APP_ROOM_DELETEKEY_ARGS (*((app_room_deletekey_args_t*) app_room_ctx.frame_ptr))
-#define APP_ROOM_DELETEKEY_KEY (*app_get_key(APP_ROOM_DELETEKEY_ARGS.key_i))
-
 //----------------------------------------------------------------------------//
 //                                                                            //
 //                       Internal Function Declarations                       //
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_deletekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_deletekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_deletekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_deletekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_keysfull_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
+static void app_room_keysfull_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
+static void app_room_keysfull_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -52,12 +48,12 @@ static void app_room_deletekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room,
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-const bui_room_t app_rooms_deletekey = {
-	.enter = app_room_deletekey_enter,
-	.exit = app_room_deletekey_exit,
+const bui_room_t app_rooms_keysfull = {
+	.enter = app_room_keysfull_enter,
+	.exit = NULL,
 	.tick = NULL,
-	.button = app_room_deletekey_button,
-	.draw = app_room_deletekey_draw,
+	.button = app_room_keysfull_button,
+	.draw = app_room_keysfull_draw,
 };
 
 //----------------------------------------------------------------------------//
@@ -66,29 +62,16 @@ const bui_room_t app_rooms_deletekey = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_deletekey_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_keysfull_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
 	app_disp_invalidate();
 }
 
-static void app_room_deletekey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	bui_room_dealloc_frame(ctx);
+static void app_room_keysfull_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
+	if (left && right)
+		bui_room_exit(ctx);
 }
 
-static void app_room_deletekey_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left) {
-		bui_room_exit(ctx);
-	} else if (right) {
-		app_key_delete(APP_ROOM_DELETEKEY_ARGS.key_i);
-		bui_room_exit(ctx);
-	}
-}
-
-static void app_room_deletekey_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_font_draw_string(bui_ctx, "Delete Key?", 64, 5, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-	char name[APP_KEY_NAME_MAX + 1];
-	os_memcpy(name, APP_ROOM_DELETEKEY_KEY.name.buff, APP_ROOM_DELETEKEY_KEY.name.size);
-	name[APP_ROOM_DELETEKEY_KEY.name.size] = '\0';
-	bui_font_draw_string(bui_ctx, name, 64, 18, BUI_DIR_TOP, bui_font_lucida_console_8);
-	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CROSS, 3, 12);
-	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CHECK, 117, 13);
+static void app_room_keysfull_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
+	bui_font_draw_string(bui_ctx, "No more space", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_font_draw_string(bui_ctx, "for keys", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 }
