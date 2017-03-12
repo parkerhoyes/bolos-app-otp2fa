@@ -123,9 +123,8 @@ static void app_room_newkey_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up)
 		new_key.exists = true;
 		new_key.name.size = APP_ROOM_NEWKEY_PERSIST.name_size;
 		os_memcpy(new_key.name.buff, APP_ROOM_NEWKEY_PERSIST.name_buff, APP_ROOM_NEWKEY_PERSIST.name_size);
-		new_key.secret.size = APP_ROOM_NEWKEY_PERSIST.secret_size;
-		app_base32_decode(APP_ROOM_NEWKEY_PERSIST.secret_buff, APP_ROOM_NEWKEY_PERSIST.secret_size,
-				new_key.secret.buff);
+		new_key.secret.size = app_base32_decode(APP_ROOM_NEWKEY_PERSIST.secret_buff,
+				APP_ROOM_NEWKEY_PERSIST.secret_size, new_key.secret.buff);
 		new_key.counter = 1;
 		app_key_new(&new_key); // There will always be enough space due to the check by app_rooms_keys
 		bui_room_dealloc_frame(ctx);
