@@ -8,6 +8,9 @@ Authentication](https://en.wikipedia.org/wiki/Multi-factor_authentication). This
 application currently only supports counter-based one time passwords (HOTP), not
 time-based one time passwords (TOTP).
 
+Precompiled versions of this application are available for download [on my
+website](https://parkerhoyes.com/bolos-apps).
+
 ## Development Cycle
 
 This repository will follow a Git branching model similar to that described in
