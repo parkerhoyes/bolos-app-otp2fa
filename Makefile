@@ -65,9 +65,15 @@ PROG := token
 
 CONFIG_PRODUCTIONS := bin/$(PROG)
 
-SOURCE_PATH := src bui/src $(BOLOS_SDK)/src $(dir $(shell find $(BOLOS_SDK)/lib_stusb* | grep "\.c$$")) $(dir $(shell find $(BOLOS_SDK)/lib_bluenrg* | grep "\.c$$"))
+SOURCE_PATH := src bui/src $(BOLOS_SDK)/src $(dir $(shell find $(BOLOS_SDK)/lib_stusb* | grep "\.c$$"))
+ifneq ($(TARGET_ID),0x31100002)
+SOURCE_PATH += $(dir $(shell find $(BOLOS_SDK)/lib_bluenrg* | grep "\.c$$"))
+endif
 SOURCE_FILES := $(foreach path, $(SOURCE_PATH),$(shell find $(path) | grep "\.c$$") )
-INCLUDES_PATH := include bui/include $(dir $(shell find $(BOLOS_SDK)/lib_stusb* | grep "\.h$$")) $(dir $(shell find $(BOLOS_SDK)/lib_bluenrg* | grep "\.h$$")) $(BOLOS_SDK)/include $(BOLOS_SDK)/include/arm
+INCLUDES_PATH := include bui/include $(BOLOS_SDK)/include $(BOLOS_SDK)/include/arm $(dir $(shell find $(BOLOS_SDK)/lib_stusb* | grep "\.h$$"))
+ifneq ($(TARGET_ID),0x31100002)
+INCLUDES_PATH += $(dir $(shell find $(BOLOS_SDK)/lib_bluenrg* | grep "\.h$$"))
+endif
 
 # Platform definitions
 DEFINES := ST31 gcc __IO=volatile
@@ -75,7 +81,9 @@ DEFINES := ST31 gcc __IO=volatile
 DEFINES += OS_IO_SEPROXYHAL IO_SEPROXYHAL_BUFFER_SIZE_B=300
 DEFINES += HAVE_BAGL HAVE_PRINTF
 DEFINES += HAVE_IO_USB HAVE_L4_USBLIB IO_USB_MAX_ENDPOINTS=6 IO_HID_EP_LENGTH=64 HAVE_USB_APDU
+ifneq ($(TARGET_ID),0x31100002)
 DEFINES += HAVE_BLE HAVE_BLUENRG HCI_READ_PACKET_NUM_MAX=3 BLUENRG_MS HCI_READ_PACKET_SIZE=72
+endif
 #DEFINES += PRINTF=screen_printf
 DEFINES += PRINTF\(...\)=
 DEFINES += UNUSED\(x\)=\(void\)x
