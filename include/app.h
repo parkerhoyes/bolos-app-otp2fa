@@ -32,7 +32,7 @@
 #include "bui.h"
 #include "bui_room.h"
 
-#define APP_VER_MAJOR 0
+#define APP_VER_MAJOR 1
 #define APP_VER_MINOR 0
 #define APP_VER_PATCH 0
 

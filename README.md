@@ -1,4 +1,4 @@
-# BOLOS OTP 2FA App
+# BOLOS OTP 2FA App v1.0.0
 
 [This repository](https://github.com/parkerhoyes/bolos-app-otp2fa) contains an
 application for the [Ledger Nano S](https://github.com/LedgerHQ/ledger-nano-s)
