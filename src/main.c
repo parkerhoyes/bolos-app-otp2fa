@@ -158,9 +158,6 @@ __attribute__((section(".boot"))) int main() {
 	TRY {
 		io_seproxyhal_init();
 
-		USB_power(0);
-		USB_power(1);
-
 		app_init();
 
 		sample_main();
