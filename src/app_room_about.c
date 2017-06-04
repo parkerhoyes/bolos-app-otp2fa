@@ -54,11 +54,13 @@ typedef struct app_room_about_active_t {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_about_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_about_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_about_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
-static void app_room_about_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_about_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_about_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event);
+
+static void app_room_about_enter(bool up);
+static void app_room_about_exit(bool up);
+static void app_room_about_draw();
+static void app_room_about_time_elapsed(uint32_t elapsed);
+static void app_room_about_button_clicked(bui_button_id_t button);
 
 static uint8_t app_room_about_elem_size(const bui_menu_menu_t *menu, uint8_t i);
 static void app_room_about_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
@@ -70,11 +72,7 @@ static void app_room_about_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui
 //----------------------------------------------------------------------------//
 
 const bui_room_t app_rooms_about = {
-	.enter = app_room_about_enter,
-	.exit = app_room_about_exit,
-	.tick = app_room_about_tick,
-	.button = app_room_about_button,
-	.draw = app_room_about_draw,
+	.event_handler = app_room_about_handle_event,
 };
 
 //----------------------------------------------------------------------------//
@@ -83,41 +81,77 @@ const bui_room_t app_rooms_about = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_about_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	bui_room_alloc(ctx, sizeof(app_room_about_active_t));
+static void app_room_about_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event) {
+	switch (event->id) {
+	case BUI_ROOM_EVENT_ENTER: {
+		bool up = BUI_ROOM_EVENT_DATA_ENTER(event)->up;
+		app_room_about_enter(up);
+	} break;
+	case BUI_ROOM_EVENT_EXIT: {
+		bool up = BUI_ROOM_EVENT_DATA_EXIT(event)->up;
+		app_room_about_exit(up);
+	} break;
+	case BUI_ROOM_EVENT_DRAW: {
+		app_room_about_draw();
+	} break;
+	case BUI_ROOM_EVENT_FORWARD: {
+		const bui_event_t *bui_event = BUI_ROOM_EVENT_DATA_FORWARD(event);
+		switch (bui_event->id) {
+		case BUI_EVENT_TIME_ELAPSED: {
+			uint32_t elapsed = BUI_EVENT_DATA_TIME_ELAPSED(bui_event)->elapsed;
+			app_room_about_time_elapsed(elapsed);
+		} break;
+		case BUI_EVENT_BUTTON_CLICKED: {
+			bui_button_id_t button = BUI_EVENT_DATA_BUTTON_CLICKED(bui_event)->button;
+			app_room_about_button_clicked(button);
+		} break;
+		// Other events are acknowledged
+		default:
+			break;
+		}
+	} break;
+	}
+}
+
+static void app_room_about_enter(bool up) {
+	bui_room_alloc(&app_room_ctx, sizeof(app_room_about_active_t));
 	APP_ROOM_ABOUT_ACTIVE.menu.elem_size_callback = app_room_about_elem_size;
 	APP_ROOM_ABOUT_ACTIVE.menu.elem_draw_callback = app_room_about_elem_draw;
 	bui_menu_init(&APP_ROOM_ABOUT_ACTIVE.menu, 3, 0, true);
 	app_disp_invalidate();
 }
 
-static void app_room_about_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	bui_room_dealloc_frame(ctx);
+static void app_room_about_exit(bool up) {
+	bui_room_dealloc_frame(&app_room_ctx);
 }
 
-static void app_room_about_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+static void app_room_about_draw() {
+	bui_menu_draw(&APP_ROOM_ABOUT_ACTIVE.menu, &app_bui_ctx);
+}
+
+static void app_room_about_time_elapsed(uint32_t elapsed) {
 	if (bui_menu_animate(&APP_ROOM_ABOUT_ACTIVE.menu, elapsed))
 		app_disp_invalidate();
 }
 
-static void app_room_about_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left && right) {
+static void app_room_about_button_clicked(bui_button_id_t button) {
+	switch (button) {
+	case BUI_BUTTON_NANOS_BOTH:
 		switch (bui_menu_get_focused(&APP_ROOM_ABOUT_ACTIVE.menu)) {
 		case 2:
-			bui_room_exit(ctx);
+			bui_room_exit(&app_room_ctx);
 			break;
 		}
-	} else if (left) {
+		break;
+	case BUI_BUTTON_NANOS_LEFT:
 		bui_menu_scroll(&APP_ROOM_ABOUT_ACTIVE.menu, true);
 		app_disp_invalidate();
-	} else {
+		break;
+	case BUI_BUTTON_NANOS_RIGHT:
 		bui_menu_scroll(&APP_ROOM_ABOUT_ACTIVE.menu, false);
 		app_disp_invalidate();
+		break;
 	}
-}
-
-static void app_room_about_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_menu_draw(&APP_ROOM_ABOUT_ACTIVE.menu, bui_ctx);
 }
 
 static uint8_t app_room_about_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -133,7 +167,7 @@ static uint8_t app_room_about_elem_size(const bui_menu_menu_t *menu, uint8_t i) 
 static void app_room_about_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0:
-		bui_font_draw_string(bui_ctx, "App Version:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "App Version:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		{
 			// TODO This wouldn't work with multi-digit version number components
 			char ver_text[7];
@@ -144,16 +178,16 @@ static void app_room_about_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui
 			ver_text[4] = '.';
 			ver_text[5] = '0' + APP_VER_PATCH;
 			ver_text[6] = '\0';
-			bui_font_draw_string(bui_ctx, ver_text, 64, y + 15, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+			bui_font_draw_string(&app_bui_ctx, ver_text, 64, y + 15, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		}
 		break;
 	case 1:
-		bui_font_draw_string(bui_ctx, "Developed By:", 64, y + 1, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-		bui_font_draw_string(bui_ctx, "Parker Hoyes", 64, y + 13, BUI_DIR_TOP, bui_font_lucida_console_8);
-		bui_font_draw_string(bui_ctx, "parkerhoyes.com", 64, y + 22, BUI_DIR_TOP, bui_font_lucida_console_8);
+		bui_font_draw_string(&app_bui_ctx, "Developed By:", 64, y + 1, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Parker Hoyes", 64, y + 13, BUI_DIR_TOP, bui_font_lucida_console_8);
+		bui_font_draw_string(&app_bui_ctx, "parkerhoyes.com", 64, y + 22, BUI_DIR_TOP, bui_font_lucida_console_8);
 		break;
 	case 2:
-		bui_font_draw_string(bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	}
 }

@@ -112,9 +112,7 @@ extern app_persist_t N_app_persist_real;
 //----------------------------------------------------------------------------//
 
 void app_init();
-void app_event_button_push(unsigned int button_mask, unsigned int button_mask_counter);
-void app_event_ticker();
-void app_event_display_processed();
+void app_io_event();
 void app_disp_invalidate();
 
 /*

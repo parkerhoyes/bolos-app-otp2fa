@@ -56,13 +56,24 @@ typedef struct app_room_main_inactive_t {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static const uint8_t app_room_main_bitmap_icon_bitmap[] = {
+static const uint8_t app_room_main_bmp_icon_bb[] = {
 	0x00, 0x00, 0x0F, 0xF0, 0x3F, 0xFC, 0x20, 0x04,
 	0x60, 0x06, 0x60, 0x86, 0x61, 0x86, 0x60, 0x06,
 	0x60, 0x06, 0x73, 0xCE, 0x73, 0xCE, 0x73, 0xCE,
 	0x38, 0x1C, 0x3C, 0x3C, 0x0F, 0xF0, 0x00, 0x00,
 };
-#define APP_ROOM_MAIN_BITMAP_ICON ((bui_const_bitmap_t) { .w = 16, .h = 16, .bb = app_room_main_bitmap_icon_bitmap })
+static const uint32_t app_room_main_bmp_icon_plt[] = {
+	BUI_CLR_BLACK,
+	BUI_CLR_WHITE,
+};
+#define APP_ROOM_MAIN_BMP_ICON \
+		((bui_const_bitmap_t) { \
+			.w = 16, \
+			.h = 16, \
+			.bb = app_room_main_bmp_icon_bb, \
+			.plt = app_room_main_bmp_icon_plt, \
+			.bpp = 1 \
+		})
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -70,11 +81,13 @@ static const uint8_t app_room_main_bitmap_icon_bitmap[] = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_main_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_main_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
-static void app_room_main_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_main_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event);
+
+static void app_room_main_enter(bool up);
+static void app_room_main_exit(bool up);
+static void app_room_main_draw();
+static void app_room_main_time_elapsed(uint32_t elapsed);
+static void app_room_main_button_clicked(bui_button_id_t button);
 
 static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i);
 static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
@@ -86,11 +99,7 @@ static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_
 //----------------------------------------------------------------------------//
 
 const bui_room_t app_rooms_main = {
-	.enter = app_room_main_enter,
-	.exit = app_room_main_exit,
-	.tick = app_room_main_tick,
-	.button = app_room_main_button,
-	.draw = app_room_main_draw,
+	.event_handler = app_room_main_handle_event,
 };
 
 //----------------------------------------------------------------------------//
@@ -99,57 +108,93 @@ const bui_room_t app_rooms_main = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_main_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_main_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event) {
+	switch (event->id) {
+	case BUI_ROOM_EVENT_ENTER: {
+		bool up = BUI_ROOM_EVENT_DATA_ENTER(event)->up;
+		app_room_main_enter(up);
+	} break;
+	case BUI_ROOM_EVENT_EXIT: {
+		bool up = BUI_ROOM_EVENT_DATA_EXIT(event)->up;
+		app_room_main_exit(up);
+	} break;
+	case BUI_ROOM_EVENT_DRAW: {
+		app_room_main_draw();
+	} break;
+	case BUI_ROOM_EVENT_FORWARD: {
+		const bui_event_t *bui_event = BUI_ROOM_EVENT_DATA_FORWARD(event);
+		switch (bui_event->id) {
+		case BUI_EVENT_TIME_ELAPSED: {
+			uint32_t elapsed = BUI_EVENT_DATA_TIME_ELAPSED(bui_event)->elapsed;
+			app_room_main_time_elapsed(elapsed);
+		} break;
+		case BUI_EVENT_BUTTON_CLICKED: {
+			bui_button_id_t button = BUI_EVENT_DATA_BUTTON_CLICKED(bui_event)->button;
+			app_room_main_button_clicked(button);
+		} break;
+		// Other events are acknowledged
+		default:
+			break;
+		}
+	} break;
+	}
+}
+
+static void app_room_main_enter(bool up) {
 	app_room_main_inactive_t inactive;
 	if (up)
 		inactive.focus = 0;
 	else
-		bui_room_pop(ctx, &inactive, sizeof(inactive));
-	bui_room_alloc(ctx, sizeof(app_room_main_active_t));
+		bui_room_pop(&app_room_ctx, &inactive, sizeof(inactive));
+	bui_room_alloc(&app_room_ctx, sizeof(app_room_main_active_t));
 	APP_ROOM_MAIN_ACTIVE.menu.elem_size_callback = app_room_main_elem_size;
 	APP_ROOM_MAIN_ACTIVE.menu.elem_draw_callback = app_room_main_elem_draw;
 	bui_menu_init(&APP_ROOM_MAIN_ACTIVE.menu, 4, inactive.focus, true);
 	app_disp_invalidate();
 }
 
-static void app_room_main_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_main_exit(bool up) {
 	if (!up)
 		os_sched_exit(0); // Go back to the dashboard
 	app_room_main_inactive_t inactive;
 	inactive.focus = bui_menu_get_focused(&APP_ROOM_MAIN_ACTIVE.menu);
-	bui_room_dealloc(ctx, sizeof(app_room_main_active_t));
-	bui_room_push(ctx, &inactive, sizeof(inactive));
+	bui_room_dealloc(&app_room_ctx, sizeof(app_room_main_active_t));
+	bui_room_push(&app_room_ctx, &inactive, sizeof(inactive));
 }
 
-static void app_room_main_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+static void app_room_main_draw() {
+	bui_menu_draw(&APP_ROOM_MAIN_ACTIVE.menu, &app_bui_ctx);
+}
+
+static void app_room_main_time_elapsed(uint32_t elapsed) {
 	if (bui_menu_animate(&APP_ROOM_MAIN_ACTIVE.menu, elapsed))
 		app_disp_invalidate();
 }
 
-static void app_room_main_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left && right) {
+static void app_room_main_button_clicked(bui_button_id_t button) {
+	switch (button) {
+	case BUI_BUTTON_NANOS_BOTH:
 		switch (bui_menu_get_focused(&APP_ROOM_MAIN_ACTIVE.menu)) {
 		case 1:
-			bui_room_enter(ctx, &app_rooms_keys, NULL, 0);
+			bui_room_enter(&app_room_ctx, &app_rooms_keys, NULL, 0);
 			break;
 		case 2:
-			bui_room_enter(ctx, &app_rooms_settings, NULL, 0);
+			bui_room_enter(&app_room_ctx, &app_rooms_settings, NULL, 0);
 			break;
 		case 3:
-			bui_room_exit(ctx);
+			bui_room_exit(&app_room_ctx);
 			break;
 		}
-	} else if (left) {
+		break;
+	case BUI_BUTTON_NANOS_LEFT:
 		bui_menu_scroll(&APP_ROOM_MAIN_ACTIVE.menu, true);
 		app_disp_invalidate();
-	} else {
+		break;
+	case BUI_BUTTON_NANOS_RIGHT:
 		bui_menu_scroll(&APP_ROOM_MAIN_ACTIVE.menu, false);
 		app_disp_invalidate();
+		break;
 	}
-}
-
-static void app_room_main_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_menu_draw(&APP_ROOM_MAIN_ACTIVE.menu, bui_ctx);
 }
 
 static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -166,18 +211,18 @@ static uint8_t app_room_main_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
 static void app_room_main_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0:
-		bui_ctx_draw_mbitmap_full(bui_ctx, APP_ROOM_MAIN_BITMAP_ICON, 8, y + 2);
-		bui_font_draw_string(bui_ctx, "OTP 2FA App", 32, y + 10, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
+		bui_ctx_draw_bitmap_full(&app_bui_ctx, APP_ROOM_MAIN_BMP_ICON, 8, y + 2);
+		bui_font_draw_string(&app_bui_ctx, "OTP 2FA App", 32, y + 10, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
 		break;
 	case 1:
-		bui_font_draw_string(bui_ctx, "Manage Keys", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Manage Keys", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 2:
-		bui_font_draw_string(bui_ctx, "Settings", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Settings", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 3:
-		bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_BADGE_DASHBOARD, 29, y + 2);
-		bui_font_draw_string(bui_ctx, "Quit app", 52, y + 9, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
+		bui_ctx_draw_bitmap_full(&app_bui_ctx, BUI_BMP_BADGE_DASHBOARD, 29, y + 2);
+		bui_font_draw_string(&app_bui_ctx, "Quit app", 52, y + 9, BUI_DIR_LEFT, bui_font_open_sans_extrabold_11);
 		break;
 	}
 }

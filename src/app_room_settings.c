@@ -58,11 +58,13 @@ typedef struct app_room_settings_inactive_t {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_settings_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_settings_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_settings_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed);
-static void app_room_settings_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_settings_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_settings_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event);
+
+static void app_room_settings_enter(bool up);
+static void app_room_settings_exit(bool up);
+static void app_room_settings_time_elapsed(uint32_t elapsed);
+static void app_room_settings_draw();
+static void app_room_settings_button_clicked(bui_button_id_t button);
 
 static uint8_t app_room_settings_elem_size(const bui_menu_menu_t *menu, uint8_t i);
 static void app_room_settings_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y);
@@ -74,11 +76,7 @@ static void app_room_settings_elem_draw(const bui_menu_menu_t *menu, uint8_t i, 
 //----------------------------------------------------------------------------//
 
 const bui_room_t app_rooms_settings = {
-	.enter = app_room_settings_enter,
-	.exit = app_room_settings_exit,
-	.tick = app_room_settings_tick,
-	.button = app_room_settings_button,
-	.draw = app_room_settings_draw,
+	.event_handler = app_room_settings_handle_event,
 };
 
 //----------------------------------------------------------------------------//
@@ -87,59 +85,95 @@ const bui_room_t app_rooms_settings = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_settings_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_settings_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event) {
+	switch (event->id) {
+	case BUI_ROOM_EVENT_ENTER: {
+		bool up = BUI_ROOM_EVENT_DATA_ENTER(event)->up;
+		app_room_settings_enter(up);
+	} break;
+	case BUI_ROOM_EVENT_EXIT: {
+		bool up = BUI_ROOM_EVENT_DATA_EXIT(event)->up;
+		app_room_settings_exit(up);
+	} break;
+	case BUI_ROOM_EVENT_DRAW: {
+		app_room_settings_draw();
+	} break;
+	case BUI_ROOM_EVENT_FORWARD: {
+		const bui_event_t *bui_event = BUI_ROOM_EVENT_DATA_FORWARD(event);
+		switch (bui_event->id) {
+		case BUI_EVENT_TIME_ELAPSED: {
+			uint32_t elapsed = BUI_EVENT_DATA_TIME_ELAPSED(bui_event)->elapsed;
+			app_room_settings_time_elapsed(elapsed);
+		} break;
+		case BUI_EVENT_BUTTON_CLICKED: {
+			bui_button_id_t button = BUI_EVENT_DATA_BUTTON_CLICKED(bui_event)->button;
+			app_room_settings_button_clicked(button);
+		} break;
+		// Other events are acknowledged
+		default:
+			break;
+		}
+	} break;
+	}
+}
+
+static void app_room_settings_enter(bool up) {
 	app_room_settings_inactive_t inactive;
 	if (up)
 		inactive.focus = 0;
 	else
-		bui_room_pop(ctx, &inactive, sizeof(inactive));
-	bui_room_alloc(ctx, sizeof(app_room_settings_active_t));
+		bui_room_pop(&app_room_ctx, &inactive, sizeof(inactive));
+	bui_room_alloc(&app_room_ctx, sizeof(app_room_settings_active_t));
 	APP_ROOM_SETTINGS_ACTIVE.menu.elem_size_callback = app_room_settings_elem_size;
 	APP_ROOM_SETTINGS_ACTIVE.menu.elem_draw_callback = app_room_settings_elem_draw;
 	bui_menu_init(&APP_ROOM_SETTINGS_ACTIVE.menu, 3, inactive.focus, true);
 	app_disp_invalidate();
 }
 
-static void app_room_settings_exit(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_settings_exit(bool up) {
 	if (up) {
 		app_room_settings_inactive_t inactive;
 		inactive.focus = bui_menu_get_focused(&APP_ROOM_SETTINGS_ACTIVE.menu);
-		bui_room_dealloc(ctx, sizeof(app_room_settings_active_t));
-		bui_room_push(ctx, &inactive, sizeof(inactive));
+		bui_room_dealloc(&app_room_ctx, sizeof(app_room_settings_active_t));
+		bui_room_push(&app_room_ctx, &inactive, sizeof(inactive));
 	} else {
-		bui_room_dealloc_frame(ctx);
+		bui_room_dealloc_frame(&app_room_ctx);
 	}
 }
 
-static void app_room_settings_tick(bui_room_ctx_t *ctx, bui_room_t *room, uint32_t elapsed) {
+static void app_room_settings_time_elapsed(uint32_t elapsed) {
 	if (bui_menu_animate(&APP_ROOM_SETTINGS_ACTIVE.menu, elapsed))
 		app_disp_invalidate();
 }
 
-static void app_room_settings_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left && right) {
-		switch (bui_menu_get_focused(&APP_ROOM_SETTINGS_ACTIVE.menu)) {
-		case 0:
-			bui_room_enter(ctx, &app_rooms_reset, NULL, 0);
-			break;
-		case 1:
-			bui_room_enter(ctx, &app_rooms_about, NULL, 0);
-			break;
-		case 2:
-			bui_room_exit(ctx);
-			break;
-		}
-	} else if (left) {
-		bui_menu_scroll(&APP_ROOM_SETTINGS_ACTIVE.menu, true);
-		app_disp_invalidate();
-	} else {
-		bui_menu_scroll(&APP_ROOM_SETTINGS_ACTIVE.menu, false);
-		app_disp_invalidate();
-	}
+static void app_room_settings_draw() {
+	bui_menu_draw(&APP_ROOM_SETTINGS_ACTIVE.menu, &app_bui_ctx);
 }
 
-static void app_room_settings_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_menu_draw(&APP_ROOM_SETTINGS_ACTIVE.menu, bui_ctx);
+static void app_room_settings_button_clicked(bui_button_id_t button) {
+	switch (button) {
+	case BUI_BUTTON_NANOS_BOTH:
+		switch (bui_menu_get_focused(&APP_ROOM_SETTINGS_ACTIVE.menu)) {
+		case 0:
+			bui_room_enter(&app_room_ctx, &app_rooms_reset, NULL, 0);
+			break;
+		case 1:
+			bui_room_enter(&app_room_ctx, &app_rooms_about, NULL, 0);
+			break;
+		case 2:
+			bui_room_exit(&app_room_ctx);
+			break;
+		}
+		break;
+	case BUI_BUTTON_NANOS_LEFT:
+		bui_menu_scroll(&APP_ROOM_SETTINGS_ACTIVE.menu, true);
+		app_disp_invalidate();
+		break;
+	case BUI_BUTTON_NANOS_RIGHT:
+		bui_menu_scroll(&APP_ROOM_SETTINGS_ACTIVE.menu, false);
+		app_disp_invalidate();
+		break;
+	}
 }
 
 static uint8_t app_room_settings_elem_size(const bui_menu_menu_t *menu, uint8_t i) {
@@ -149,13 +183,13 @@ static uint8_t app_room_settings_elem_size(const bui_menu_menu_t *menu, uint8_t 
 static void app_room_settings_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0:
-		bui_font_draw_string(bui_ctx, "Reset", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Reset", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 1:
-		bui_font_draw_string(bui_ctx, "About", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "About", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	case 2:
-		bui_font_draw_string(bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		bui_font_draw_string(&app_bui_ctx, "Back", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	}
 }

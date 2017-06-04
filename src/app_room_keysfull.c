@@ -38,9 +38,11 @@
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_keysfull_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_keysfull_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_keysfull_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_keysfull_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event);
+
+static void app_room_keysfull_enter(bool up);
+static void app_room_keysfull_draw();
+static void app_room_keysfull_button_clicked(bui_button_id_t button);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -49,11 +51,7 @@ static void app_room_keysfull_draw(bui_room_ctx_t *ctx, const bui_room_t *room, 
 //----------------------------------------------------------------------------//
 
 const bui_room_t app_rooms_keysfull = {
-	.enter = app_room_keysfull_enter,
-	.exit = NULL,
-	.tick = NULL,
-	.button = app_room_keysfull_button,
-	.draw = app_room_keysfull_draw,
+	.event_handler = app_room_keysfull_handle_event,
 };
 
 //----------------------------------------------------------------------------//
@@ -62,16 +60,43 @@ const bui_room_t app_rooms_keysfull = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_keysfull_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
+static void app_room_keysfull_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event) {
+	switch (event->id) {
+	case BUI_ROOM_EVENT_ENTER: {
+		bool up = BUI_ROOM_EVENT_DATA_ENTER(event)->up;
+		app_room_keysfull_enter(up);
+	} break;
+	case BUI_ROOM_EVENT_DRAW: {
+		app_room_keysfull_draw();
+	} break;
+	case BUI_ROOM_EVENT_FORWARD: {
+		const bui_event_t *bui_event = BUI_ROOM_EVENT_DATA_FORWARD(event);
+		switch (bui_event->id) {
+		case BUI_EVENT_BUTTON_CLICKED: {
+			bui_button_id_t button = BUI_EVENT_DATA_BUTTON_CLICKED(bui_event)->button;
+			app_room_keysfull_button_clicked(button);
+		} break;
+		// Other events are acknowledged
+		default:
+			break;
+		}
+	} break;
+	// Other events are acknowledged
+	default:
+		break;
+	}
+}
+
+static void app_room_keysfull_enter(bool up) {
 	app_disp_invalidate();
 }
 
-static void app_room_keysfull_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left && right)
-		bui_room_exit(ctx);
+static void app_room_keysfull_draw() {
+	bui_font_draw_string(&app_bui_ctx, "No more space", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_font_draw_string(&app_bui_ctx, "for keys", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 }
 
-static void app_room_keysfull_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_font_draw_string(bui_ctx, "No more space", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-	bui_font_draw_string(bui_ctx, "for keys", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+static void app_room_keysfull_button_clicked(bui_button_id_t button) {
+	if (button == BUI_BUTTON_NANOS_BOTH)
+		bui_room_exit(&app_room_ctx);
 }

@@ -48,7 +48,6 @@
  */
 
 static uint8_t app_room_ctx_stack[APP_ROOM_CTX_STACK_SIZE] __attribute__((aligned(4)));
-static bool app_seproxy_ready;
 static bool app_disp_invalidated; // true if the display needs to be redrawn
 static app_key_slot_t *app_persist_keys;
 
@@ -76,6 +75,8 @@ static const app_key_t app_zeroed_key = {};
  *     1 if str1 > str2, 0 if str1 == str2, -1 if str1 < str2
  */
 static int8_t app_strcmp(const char *str1, uint8_t str1_len, const char *str2, uint8_t str2_len);
+
+static void app_handle_bui_event(bui_ctx_t *ctx, const bui_event_t *event);
 
 static void app_display();
 
@@ -118,50 +119,25 @@ app_persist_t N_app_persist_real;
 //----------------------------------------------------------------------------//
 
 void app_init() {
-	// Set a ticker interval of APP_TICKER_INTERVAL ms
-	G_io_seproxyhal_spi_buffer[0] = SEPROXYHAL_TAG_SET_TICKER_INTERVAL;
-	G_io_seproxyhal_spi_buffer[1] = 0; // Message length, high-byte
-	G_io_seproxyhal_spi_buffer[2] = 2; // Message length, low-byte
-	G_io_seproxyhal_spi_buffer[3] = 0; // Ticker interval, high-byte
-	G_io_seproxyhal_spi_buffer[4] = APP_TICKER_INTERVAL; // Ticker interval, low-byte
-	io_seproxyhal_spi_send(G_io_seproxyhal_spi_buffer, 5);
-
 	// Initialize global vars
-	app_seproxy_ready = true;
 	app_disp_invalidated = true;
 	app_persist_keys = (app_key_slot_t*) &N_app_persist.key_data[(64 - ((uintptr_t) N_app_persist.key_data & 63)) & 63];
 	bui_ctx_init(&app_bui_ctx);
+	bui_ctx_set_event_handler(&app_bui_ctx, app_handle_bui_event);
+	bui_ctx_set_ticker(&app_bui_ctx, APP_TICKER_INTERVAL);
 	if (!N_app_persist.init)
 		app_persist_init();
 
 	// Launch the GUI
 	bui_room_ctx_init(&app_room_ctx, app_room_ctx_stack, &app_rooms_main, NULL, 0);
+
+	// Draw the first frame
+	app_display();
 }
 
-void app_event_button_push(unsigned int button_mask, unsigned int button_mask_counter) {
-	switch (button_mask) {
-	case BUTTON_EVT_RELEASED | BUTTON_LEFT | BUTTON_RIGHT:
-		bui_room_current_button(&app_room_ctx, true, true);
-		break;
-	case BUTTON_EVT_RELEASED | BUTTON_LEFT:
-		bui_room_current_button(&app_room_ctx, true, false);
-		break;
-	case BUTTON_EVT_RELEASED | BUTTON_RIGHT:
-		bui_room_current_button(&app_room_ctx, false, true);
-		break;
-	}
-}
-
-void app_event_ticker() {
-	bui_room_current_tick(&app_room_ctx, APP_TICKER_INTERVAL);
-	if (app_disp_invalidated) {
-		app_display();
-		app_disp_invalidated = false;
-	}
-}
-
-void app_event_display_processed() {
-	app_seproxy_ready = !bui_ctx_display(&app_bui_ctx);
+void app_io_event() {
+	// Pass the event on to BUI for handling
+	bui_ctx_seproxyhal_event(&app_bui_ctx, true);
 }
 
 void app_disp_invalidate() {
@@ -375,11 +351,30 @@ static int8_t app_strcmp(const char *str1, uint8_t str1_len, const char *str2, u
 	return 0;
 }
 
+static void app_handle_bui_event(bui_ctx_t *ctx, const bui_event_t *event) {
+	bui_room_forward_event(&app_room_ctx, event);
+	switch (event->id) {
+	case BUI_EVENT_TIME_ELAPSED: {
+		if (app_disp_invalidated && bui_ctx_is_displayed(&app_bui_ctx)) {
+			app_display();
+			app_disp_invalidated = false;
+		}
+	} break;
+	// Other events are acknowledged
+	default:
+		break;
+	}
+}
+
 static void app_display() {
-	bui_ctx_fill(&app_bui_ctx, false);
-	bui_room_current_draw(&app_room_ctx, &app_bui_ctx);
-	if (app_seproxy_ready)
-		app_seproxy_ready = !bui_ctx_display(&app_bui_ctx);
+	bui_ctx_fill(&app_bui_ctx, BUI_CLR_BLACK);
+	// Draw the current room by dispatching event BUI_ROOM_EVENT_DRAW
+	{
+		bui_room_event_data_draw_t data = { .bui_ctx = &app_bui_ctx };
+		bui_room_event_t event = { .id = BUI_ROOM_EVENT_DRAW, .data = &data };
+		bui_room_dispatch_event(&app_room_ctx, &event);
+	}
+	bui_ctx_display(&app_bui_ctx);
 }
 
 static void app_persist_init() {

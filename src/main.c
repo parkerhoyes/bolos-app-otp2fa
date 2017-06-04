@@ -117,26 +117,9 @@ unsigned short io_exchange_al(unsigned char channel, unsigned short tx_len) {
 	return 0;
 }
 
-unsigned int handle_button_push(unsigned int button_mask, unsigned int button_mask_counter) {
-	app_event_button_push(button_mask, button_mask_counter);
-	return 0;
-}
-
 unsigned char io_event(unsigned char channel) {
-	switch (G_io_seproxyhal_spi_buffer[0]) {
-	case SEPROXYHAL_TAG_BUTTON_PUSH_EVENT:
-		io_seproxyhal_button_push(&handle_button_push, G_io_seproxyhal_spi_buffer[3] >> 1);
-		break;
-	case SEPROXYHAL_TAG_TICKER_EVENT:
-		app_event_ticker();
-		break;
-	case SEPROXYHAL_TAG_DISPLAY_PROCESSED_EVENT:
-		app_event_display_processed();
-		break;
-	// Unknown events are acknowledged
-	default:
-		break;
-	}
+	// Pass the event on to the app for handling
+	app_io_event();
 
 	// Close the event if not done previously (by a display or whatever)
 	if (!io_seproxyhal_spi_is_status_sent()) {

@@ -39,9 +39,11 @@
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_reset_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up);
-static void app_room_reset_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right);
-static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx);
+static void app_room_reset_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event);
+
+static void app_room_reset_enter(bool up);
+static void app_room_reset_draw();
+static void app_room_reset_button_clicked(bui_button_id_t button);
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -50,11 +52,7 @@ static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui
 //----------------------------------------------------------------------------//
 
 const bui_room_t app_rooms_reset = {
-	.enter = app_room_reset_enter,
-	.exit = NULL,
-	.tick = NULL,
-	.button = app_room_reset_button,
-	.draw = app_room_reset_draw,
+	.event_handler = app_room_reset_handle_event,
 };
 
 //----------------------------------------------------------------------------//
@@ -63,22 +61,52 @@ const bui_room_t app_rooms_reset = {
 //                                                                            //
 //----------------------------------------------------------------------------//
 
-static void app_room_reset_enter(bui_room_ctx_t *ctx, bui_room_t *room, bool up) {
-	app_disp_invalidate();
-}
-
-static void app_room_reset_button(bui_room_ctx_t *ctx, bui_room_t *room, bool left, bool right) {
-	if (left) {
-		bui_room_exit(ctx);
-	} else if (right) {
-		app_persist_wipe();
-		bui_room_exit(ctx);
+static void app_room_reset_handle_event(bui_room_ctx_t *ctx, const bui_room_event_t *event) {
+	switch (event->id) {
+	case BUI_ROOM_EVENT_ENTER: {
+		bool up = BUI_ROOM_EVENT_DATA_ENTER(event)->up;
+		app_room_reset_enter(up);
+	} break;
+	case BUI_ROOM_EVENT_DRAW: {
+		app_room_reset_draw();
+	} break;
+	case BUI_ROOM_EVENT_FORWARD: {
+		const bui_event_t *bui_event = BUI_ROOM_EVENT_DATA_FORWARD(event);
+		switch (bui_event->id) {
+		case BUI_EVENT_BUTTON_CLICKED: {
+			bui_button_id_t button = BUI_EVENT_DATA_BUTTON_CLICKED(bui_event)->button;
+			app_room_reset_button_clicked(button);
+		} break;
+		// Other events are acknowledged
+		default:
+			break;
+		}
+	} break;
+	// Other events are acknowledged
+	default:
+		break;
 	}
 }
 
+static void app_room_reset_enter(bool up) {
+	app_disp_invalidate();
+}
+
 static void app_room_reset_draw(bui_room_ctx_t *ctx, const bui_room_t *room, bui_ctx_t *bui_ctx) {
-	bui_font_draw_string(bui_ctx, "Reset all", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-	bui_font_draw_string(bui_ctx, "app data?", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CROSS, 3, 12);
-	bui_ctx_draw_mbitmap_full(bui_ctx, BUI_BITMAP_ICON_CHECK, 117, 13);
+	bui_font_draw_string(&app_bui_ctx, "Reset all", 64, 4, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_font_draw_string(&app_bui_ctx, "app data?", 64, 17, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+	bui_ctx_draw_bitmap_full(&app_bui_ctx, BUI_BMP_ICON_CROSS, 3, 12);
+	bui_ctx_draw_bitmap_full(&app_bui_ctx, BUI_BMP_ICON_CHECK, 117, 13);
+}
+
+static void app_room_reset_button_clicked(bui_button_id_t button) {
+	switch (button) {
+	case BUI_BUTTON_NANOS_LEFT:
+		bui_room_exit(&app_room_ctx);
+		break;
+	case BUI_BUTTON_NANOS_RIGHT:
+		app_persist_wipe();
+		bui_room_exit(&app_room_ctx);
+		break;
+	}
 }
