@@ -42,6 +42,9 @@
 #define APP_KEY_SECRET_ENCODED_MAX ((APP_KEY_SECRET_MAX * 8 + 5 - 1) / 5) // In characters
 #define APP_N_KEYS_MAX 64
 
+#define APP_STR(x) APP_STR_(x)
+#define APP_STR_(x) #x
+
 #define N_app_persist (*(app_persist_t*) PIC(&N_app_persist_real))
 
 //----------------------------------------------------------------------------//

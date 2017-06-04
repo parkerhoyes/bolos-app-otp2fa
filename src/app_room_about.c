@@ -38,6 +38,8 @@
 
 #define APP_ROOM_ABOUT_ACTIVE (*((app_room_about_active_t*) app_room_ctx.frame_ptr))
 
+#define APP_ROOM_ABOUT_VER_STR ("v" APP_STR(APP_VER_MAJOR) "." APP_STR(APP_VER_MINOR) "." APP_STR(APP_VER_PATCH))
+
 //----------------------------------------------------------------------------//
 //                                                                            //
 //                  Internal Type Declarations & Definitions                  //
@@ -168,18 +170,8 @@ static void app_room_about_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui
 	switch (i) {
 	case 0:
 		bui_font_draw_string(&app_bui_ctx, "App Version:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-		{
-			// TODO This wouldn't work with multi-digit version number components
-			char ver_text[7];
-			ver_text[0] = 'v';
-			ver_text[1] = '0' + APP_VER_MAJOR;
-			ver_text[2] = '.';
-			ver_text[3] = '0' + APP_VER_MINOR;
-			ver_text[4] = '.';
-			ver_text[5] = '0' + APP_VER_PATCH;
-			ver_text[6] = '\0';
-			bui_font_draw_string(&app_bui_ctx, ver_text, 64, y + 15, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-		}
+		bui_font_draw_string(&app_bui_ctx, APP_ROOM_ABOUT_VER_STR, 64, y + 15, BUI_DIR_TOP,
+				bui_font_open_sans_extrabold_11);
 		break;
 	case 1:
 		bui_font_draw_string(&app_bui_ctx, "Developed By:", 64, y + 1, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
