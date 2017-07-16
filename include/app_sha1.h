@@ -21,6 +21,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+#ifndef APP_SHA1_H_
+#define APP_SHA1_H_
+
 #include <stdint.h>
 
 typedef struct {
@@ -67,3 +70,5 @@ void app_sha1_ctx_iterate(app_sha1_ctx_t *ctx);
  *     digest_dest: the destination in which to store the resulting hash
  */
 void app_sha1_ctx_hash(app_sha1_ctx_t *ctx, unsigned char digest_dest[20]);
+
+#endif

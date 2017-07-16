@@ -21,6 +21,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+#ifndef APP_OTP_H_
+#define APP_OTP_H_
+
 #include <stdint.h>
 
 /*
@@ -47,3 +50,5 @@ void app_otp_6digit(const unsigned char *key, uint8_t key_len, uint64_t counter,
  *           terminator
  */
 void app_otp_extract_6digit(const unsigned char digest[20], char dest[6]);
+
+#endif

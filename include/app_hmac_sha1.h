@@ -21,6 +21,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+#ifndef APP_HMAC_SHA1_H_
+#define APP_HMAC_SHA1_H_
+
 #include <stdint.h>
 
 /*
@@ -35,3 +38,5 @@
  */
 void app_hmac_sha1_hash(const unsigned char *key, uint8_t key_len, const unsigned char *text, uint32_t text_len,
 		unsigned char dest[20]);
+
+#endif
