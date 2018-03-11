@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -47,6 +47,7 @@
 
 // This data is always on the stack at the bottom of the stack frame, whether this room is the active room or not
 typedef struct __attribute__((aligned(4))) app_room_newkey_persist_t {
+	app_key_type_t type;
 	uint8_t name_size;
 	char name_buff[APP_KEY_NAME_MAX];
 	uint8_t secret_size;
@@ -133,13 +134,14 @@ static void app_room_newkey_enter(bool up) {
 		app_room_newkey_persist_t *persist = bui_room_alloc(&app_room_ctx, sizeof(app_room_newkey_persist_t));
 		persist->name_size = 0;
 		persist->secret_size = 0;
+		persist->type = APP_KEY_TYPE_TOTP;
 	} else {
 		bui_room_pop(&app_room_ctx, &inactive, sizeof(inactive));
 	}
 	bui_room_alloc(&app_room_ctx, sizeof(app_room_newkey_active_t));
 	APP_ROOM_NEWKEY_ACTIVE.menu.elem_size_callback = app_room_newkey_elem_size;
 	APP_ROOM_NEWKEY_ACTIVE.menu.elem_draw_callback = app_room_newkey_elem_draw;
-	bui_menu_init(&APP_ROOM_NEWKEY_ACTIVE.menu, 3, inactive.focus, true);
+	bui_menu_init(&APP_ROOM_NEWKEY_ACTIVE.menu, 4, inactive.focus, true);
 	app_disp_invalidate();
 }
 
@@ -151,6 +153,7 @@ static void app_room_newkey_exit(bool up) {
 		}
 		app_key_t new_key;
 		new_key.exists = true;
+		new_key.type = APP_ROOM_NEWKEY_PERSIST.type;
 		new_key.name.size = APP_ROOM_NEWKEY_PERSIST.name_size;
 		os_memcpy(new_key.name.buff, APP_ROOM_NEWKEY_PERSIST.name_buff, APP_ROOM_NEWKEY_PERSIST.name_size);
 		new_key.secret.size = app_base32_decode(APP_ROOM_NEWKEY_PERSIST.secret_buff,
@@ -180,18 +183,23 @@ static void app_room_newkey_button_clicked(bui_button_id_t button) {
 	case BUI_BUTTON_NANOS_BOTH:
 		switch (bui_menu_get_focused(&APP_ROOM_NEWKEY_ACTIVE.menu)) {
 		case 0: {
+			app_room_editkeytype_args_t args;
+			args.type = &APP_ROOM_NEWKEY_PERSIST.type;
+			bui_room_enter(&app_room_ctx, &app_rooms_editkeytype, &args, sizeof(args));
+		} break;
+		case 1: {
 			app_room_editkeyname_args_t args;
 			args.name_size = &APP_ROOM_NEWKEY_PERSIST.name_size;
 			args.name_buff = APP_ROOM_NEWKEY_PERSIST.name_buff;
 			bui_room_enter(&app_room_ctx, &app_rooms_editkeyname, &args, sizeof(args));
 		} break;
-		case 1: {
+		case 2: {
 			app_room_editkeysecret_args_t args;
 			args.secret_size = &APP_ROOM_NEWKEY_PERSIST.secret_size;
 			args.secret_buff = APP_ROOM_NEWKEY_PERSIST.secret_buff;
 			bui_room_enter(&app_room_ctx, &app_rooms_editkeysecret, &args, sizeof(args));
 		} break;
-		case 2:
+		case 3:
 			bui_room_exit(&app_room_ctx);
 			break;
 		}
@@ -211,7 +219,8 @@ static uint8_t app_room_newkey_elem_size(const bui_menu_menu_t *menu, uint8_t i)
 	switch (i) {
 		case 0: return 25;
 		case 1: return 25;
-		case 2: return 15;
+		case 2: return APP_ROOM_NEWKEY_PERSIST.secret_size > 19 ? 31 : 25;
+		case 3: return 15;
 	}
 	// Impossible case
 	return 0;
@@ -220,6 +229,12 @@ static uint8_t app_room_newkey_elem_size(const bui_menu_menu_t *menu, uint8_t i)
 static void app_room_newkey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bui_ctx_t *bui_ctx, int16_t y) {
 	switch (i) {
 	case 0: {
+		bui_font_draw_string(&app_bui_ctx, "Key Type:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
+		const char *text = APP_ROOM_NEWKEY_PERSIST.type == APP_KEY_TYPE_TOTP ? "TOTP (time-based)" :
+				"HOTP (counter-based)";
+		bui_font_draw_string(&app_bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
+	} break;
+	case 1: {
 		bui_font_draw_string(&app_bui_ctx, "Key Name:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		char text[APP_KEY_NAME_MAX + 1];
 		if (APP_ROOM_NEWKEY_PERSIST.name_size == 0) {
@@ -230,18 +245,37 @@ static void app_room_newkey_elem_draw(const bui_menu_menu_t *menu, uint8_t i, bu
 		}
 		bui_font_draw_string(&app_bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
 	} break;
-	case 1: {
-		bui_font_draw_string(&app_bui_ctx, "Key Secret:", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
-		char text[APP_KEY_SECRET_ENCODED_MAX + 1];
+	case 2: {
+		bool large = APP_ROOM_NEWKEY_PERSIST.secret_size > 19;
+		bui_font_draw_string(&app_bui_ctx, "Key Secret:", 64, y + (large ? 1 : 2), BUI_DIR_TOP,
+				bui_font_open_sans_extrabold_11);
 		if (APP_ROOM_NEWKEY_PERSIST.secret_size == 0) {
-			os_memcpy(text, "<type secret>", 14);
-		} else {
+			bui_font_draw_string(&app_bui_ctx, "<type secret>", 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
+		} else if (APP_ROOM_NEWKEY_PERSIST.secret_size <= 19) {
+			char text[20];
 			os_memcpy(text, APP_ROOM_NEWKEY_PERSIST.secret_buff, APP_ROOM_NEWKEY_PERSIST.secret_size);
 			text[APP_ROOM_NEWKEY_PERSIST.secret_size] = '\0';
+			bui_font_draw_string(&app_bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
+		} else if (APP_ROOM_NEWKEY_PERSIST.secret_size <= 38) {
+			char text[20];
+			os_memcpy(text, APP_ROOM_NEWKEY_PERSIST.secret_buff, 19);
+			text[19] = '\0';
+			bui_font_draw_string(&app_bui_ctx, text, 64, y + 13, BUI_DIR_TOP, bui_font_lucida_console_8);
+			os_memcpy(text, &APP_ROOM_NEWKEY_PERSIST.secret_buff[19], APP_ROOM_NEWKEY_PERSIST.secret_size - 19);
+			text[APP_ROOM_NEWKEY_PERSIST.secret_size - 19] = '\0';
+			bui_font_draw_string(&app_bui_ctx, text, 64, y + 22, BUI_DIR_TOP, bui_font_lucida_console_8);
+		} else {
+			char text[20];
+			os_memcpy(text, APP_ROOM_NEWKEY_PERSIST.secret_buff, 19);
+			text[19] = '\0';
+			bui_font_draw_string(&app_bui_ctx, text, 64, y + 13, BUI_DIR_TOP, bui_font_lucida_console_8);
+			os_memcpy(text, &APP_ROOM_NEWKEY_PERSIST.secret_buff[19], 16);
+			os_memcpy(&text[16], "...", 3);
+			text[19] = '\0';
+			bui_font_draw_string(&app_bui_ctx, text, 64, y + 22, BUI_DIR_TOP, bui_font_lucida_console_8);
 		}
-		bui_font_draw_string(&app_bui_ctx, text, 64, y + 15, BUI_DIR_TOP, bui_font_lucida_console_8);
 	} break;
-	case 2:
+	case 3:
 		bui_font_draw_string(&app_bui_ctx, "Done", 64, y + 2, BUI_DIR_TOP, bui_font_open_sans_extrabold_11);
 		break;
 	}

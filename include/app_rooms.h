@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -40,6 +40,16 @@ typedef struct app_room_managekey_args_t {
 	uint8_t key_i; // The index of the key to be managed in N_app_persist.keys
 } app_room_managekey_args_t;
 
+typedef struct __attribute__((aligned(4))) app_room_verifytime_args_t {
+	const uint64_t *secs;
+	bool *time_verified;
+	int32_t offset;
+} app_room_verifytime_args_t;
+
+typedef struct __attribute__((aligned(4))) app_room_editkeytype_args_t {
+	app_key_type_t *type;
+} app_room_editkeytype_args_t;
+
 typedef struct __attribute__((aligned(4))) app_room_editkeyname_args_t {
 	uint8_t *name_size;
 	char *name_buff;
@@ -73,6 +83,8 @@ extern const bui_room_t app_rooms_keys;
 extern const bui_room_t app_rooms_newkey;
 extern const bui_room_t app_rooms_keysfull;
 extern const bui_room_t app_rooms_managekey;
+extern const bui_room_t app_rooms_verifytime;
+extern const bui_room_t app_rooms_editkeytype;
 extern const bui_room_t app_rooms_editkeyname;
 extern const bui_room_t app_rooms_editkeysecret;
 extern const bui_room_t app_rooms_editkeycounter;

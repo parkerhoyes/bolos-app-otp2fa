@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -25,6 +25,8 @@
 #define APP_OTP_H_
 
 #include <stdint.h>
+
+#define APP_OTP_TOTP_TIME_STEP 30
 
 /*
  * Generate a 6-digit OTP number using the HMAC-SHA-1 algorithm with the specified key and counter value. To generate a

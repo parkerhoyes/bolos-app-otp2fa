@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -32,11 +32,11 @@
 #include "bui.h"
 #include "bui_room.h"
 
-#define APP_VER_MAJOR 1
-#define APP_VER_MINOR 0
-#define APP_VER_PATCH 0
+#define APP_VER_MAJOR APPVERSION_MAJOR
+#define APP_VER_MINOR APPVERSION_MINOR
+#define APP_VER_PATCH APPVERSION_PATCH
 
-#define APP_ROOM_CTX_STACK_SIZE 512
+#define APP_ROOM_CTX_STACK_SIZE 768
 #define APP_KEY_NAME_MAX 20 // In characters
 #define APP_KEY_SECRET_MAX 20 // In bytes
 #define APP_KEY_SECRET_ENCODED_MAX ((APP_KEY_SECRET_MAX * 8 + 5 - 1) / 5) // In characters
@@ -63,9 +63,14 @@ typedef struct app_key_secret_t {
 	uint8_t buff[APP_KEY_SECRET_MAX]; // Stores the secret decoded, big-endian
 } app_key_secret_t;
 
+typedef uint8_t app_key_type_t;
+#define APP_KEY_TYPE_TOTP ((app_key_type_t) 0)
+#define APP_KEY_TYPE_HOTP ((app_key_type_t) 1)
+
 typedef struct app_key_t {
-	uint64_t counter;
+	uint64_t counter; // the HOTP key counter, or an unspecified value if this is a TOTP key
 	bool exists; // true if the key exists, false if it has been deleted
+	app_key_type_t type;
 	app_key_name_t name;
 	app_key_secret_t secret;
 } app_key_t;
@@ -117,6 +122,33 @@ extern app_persist_t N_app_persist_real;
 void app_init();
 void app_io_event();
 void app_disp_invalidate();
+
+/*
+ * Suggest to the app what time it is.
+ *
+ * Args:
+ *     secs: UNIX timestamp; must be < 2^35
+ *     offset: offset of current timezone from UTC, in seconds; must be in [-86400, 86400]
+ */
+void app_set_time(uint64_t secs, int32_t offset);
+
+/*
+ * Get the current time.
+ *
+ * Returns:
+ *     a UNIX timestamp, in seconds, which is < 2^35 (0 indicates the time is not known)
+ */
+uint64_t app_get_time();
+
+/*
+ * Get the current timezone.
+ *
+ * If the current time is known (via app_get_time()), then the timezone will be known as well.
+ *
+ * Returns:
+ *     offset of current timezone from UTC, in seconds, in the range [-86400, 86400], or 0 if the timezone is not known
+ */
+int32_t app_get_timezone();
 
 /*
  * Encode the provided byte buffer as a base-32 string according to RFC 4648, with no padding.
@@ -188,6 +220,8 @@ app_key_t* app_get_key(uint8_t i);
 void app_key_delete(uint8_t i);
 
 bool app_key_has_name(uint8_t i, const char *src, uint8_t size);
+
+void app_key_set_type(uint8_t i, app_key_type_t type);
 
 void app_key_set_name(uint8_t i, char *src, uint8_t size);
 

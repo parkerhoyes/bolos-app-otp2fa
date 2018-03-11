@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -50,12 +50,8 @@
 static uint8_t app_room_ctx_stack[APP_ROOM_CTX_STACK_SIZE] __attribute__((aligned(4)));
 static bool app_disp_invalidated; // true if the display needs to be redrawn
 static app_key_slot_t *app_persist_keys;
-
-/*
- * Internal Const (NVRAM) Variable Definitions
- */
-
-static const app_key_t app_zeroed_key = {};
+static uint64_t app_time; // current time as a UNIX timestamp, in MILLIseconds
+static int32_t app_time_offset; // offset of current timezone from UTC, in seconds
 
 //----------------------------------------------------------------------------//
 //                                                                            //
@@ -122,6 +118,8 @@ void app_init() {
 	// Initialize global vars
 	app_disp_invalidated = true;
 	app_persist_keys = (app_key_slot_t*) &N_app_persist.key_data[(64 - ((uintptr_t) N_app_persist.key_data & 63)) & 63];
+	app_time = 0;
+	app_time_offset = 0;
 	bui_ctx_init(&app_bui_ctx);
 	bui_ctx_set_event_handler(&app_bui_ctx, app_handle_bui_event);
 	bui_ctx_set_ticker(&app_bui_ctx, APP_TICKER_INTERVAL);
@@ -142,6 +140,21 @@ void app_io_event() {
 
 void app_disp_invalidate() {
 	app_disp_invalidated = true;
+}
+
+void app_set_time(uint64_t secs, int32_t offset) {
+	app_time = secs * 1000;
+	app_time_offset = offset;
+}
+
+uint64_t app_get_time() {
+	uint64_t secs = app_time / 1000;
+	secs &= 0x00000007FFFFFFFF;
+	return secs;
+}
+
+int32_t app_get_timezone() {
+	return app_time_offset;
 }
 
 uint8_t app_base32_encode(void *src, uint8_t src_size, char *dest) {
@@ -253,7 +266,7 @@ app_key_t* app_get_key(uint8_t i) {
 }
 
 void app_key_delete(uint8_t i) {
-	nvm_write(app_get_key(i), (void*) &app_zeroed_key, sizeof(app_zeroed_key));
+	nvm_write(app_get_key(i), NULL, sizeof(app_key_t));
 }
 
 bool app_key_has_name(uint8_t i, const char *src, uint8_t size) {
@@ -265,6 +278,10 @@ bool app_key_has_name(uint8_t i, const char *src, uint8_t size) {
 			return false;
 	}
 	return true;
+}
+
+void app_key_set_type(uint8_t i, app_key_type_t type) {
+	nvm_write(&app_get_key(i)->type, &type, sizeof(type));
 }
 
 void app_key_set_name(uint8_t i, char *src, uint8_t size) {
@@ -325,9 +342,8 @@ uint8_t app_keys_sort(uint8_t dest[APP_N_KEYS_MAX]) {
 }
 
 void app_persist_wipe() {
-	// TODO There must be a better way to do this...
-	for (uint8_t i = 0; i < APP_N_KEYS_MAX; i++)
-		nvm_write(app_get_key(i), (void*) &app_zeroed_key, sizeof(app_zeroed_key));
+	nvm_write(&N_app_persist, NULL, sizeof(N_app_persist));
+	app_persist_init();
 }
 
 //----------------------------------------------------------------------------//
@@ -359,6 +375,8 @@ static void app_handle_bui_event(bui_ctx_t *ctx, const bui_event_t *event) {
 			app_display();
 			app_disp_invalidated = false;
 		}
+		if (app_time != 0)
+			app_time += APP_TICKER_INTERVAL;
 	} break;
 	// Other events are acknowledged
 	default:

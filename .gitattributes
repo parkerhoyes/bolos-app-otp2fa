@@ -10,6 +10,7 @@
 #     Source files
 *.c text diff
 *.h text diff
+*.py text diff
 Makefile text diff
 
 #     Informational files

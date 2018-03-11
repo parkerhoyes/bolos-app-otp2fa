@@ -2,7 +2,7 @@
  * License for the BOLOS OTP 2FA Application project, originally found here:
  * https://github.com/parkerhoyes/bolos-app-otp2fa
  *
- * Copyright (C) 2017 Parker Hoyes <contact@parkerhoyes.com>
+ * Copyright (C) 2017, 2018 Parker Hoyes <contact@parkerhoyes.com>
  *
  * This software is provided "as-is", without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from the
@@ -22,6 +22,7 @@
  */
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "os.h"
 #include "os_io_seproxyhal.h"
@@ -29,6 +30,13 @@
 #include "app.h"
 
 unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
+
+#define CLA 0xE0
+#define INS_MAGIC 0x02
+#define INS_SET_TIME 0x04
+
+#define PROTO_HOST_MAGIC 0x72A5F76C
+#define PROTO_DEVICE_MAGIC 0xF2D17183
 
 void sample_main() {
 	volatile unsigned int rx = 0;
@@ -50,7 +58,7 @@ void sample_main() {
 				THROW(0x6982);
 			}
 
-			if (G_io_apdu_buffer[0] != 0x80) {
+			if (G_io_apdu_buffer[0] != CLA) {
 				THROW(0x6E00);
 			}
 
@@ -63,8 +71,40 @@ void sample_main() {
 			case 0x01: // Case 1
 				THROW(0x9000);
 				break;
-			case 0x02: // Echo
-				tx = rx;
+			case INS_MAGIC:
+				if (G_io_apdu_buffer[2] != 0x00 || G_io_apdu_buffer[3] != 0x00)
+					THROW(0x6A86); // Incorrect parameters
+				if (rx != 9)
+					THROW(0x6700); // Incorrect length
+				for (uint8_t i = 0; i < 4; i++) {
+					if (G_io_apdu_buffer[5 + i] != (((uint32_t) PROTO_HOST_MAGIC >> (24 - 8 * i)) & 0xFF))
+						THROW(0x6A80); // Invalid host magic
+				}
+				for (uint8_t i = 0; i < 4; i++)
+					G_io_apdu_buffer[tx++] = ((uint64_t) PROTO_DEVICE_MAGIC >> (24 - 8 * i)) & 0xFF;
+				THROW(0x9000);
+			case INS_SET_TIME:
+				if (G_io_apdu_buffer[2] != 0x00 || G_io_apdu_buffer[3] != 0x00)
+					THROW(0x6A86); // Incorrect parameters
+				if (rx != 17)
+					THROW(0x6700); // Incorrect length
+				uint64_t secs = 0;
+				for (uint8_t i = 0; i < 8; i++) {
+					secs <<= 8;
+					secs |= G_io_apdu_buffer[5 + i];
+				}
+				int32_t offset = 0;
+				for (uint8_t i = 0; i < 4; i++) {
+					offset <<= 8;
+					offset |= G_io_apdu_buffer[13 + i];
+				}
+				if (secs > 0x00000007FFFFFFFF)
+					THROW(0x6A80); // Incorrect time data
+				if (offset < 0 && -offset > (int64_t) secs)
+					THROW(0x6A80); // Incorrect time data
+				if ((offset < 0 ? -offset : offset) > 86400)
+					THROW(0x6A80); // Incorrect time data
+				app_set_time(secs, offset);
 				THROW(0x9000);
 				break;
 			case 0xFF: // Return to dashboard
@@ -140,6 +180,8 @@ __attribute__((section(".boot"))) int main() {
 	BEGIN_TRY {
 	TRY {
 		io_seproxyhal_init();
+
+		USB_power(1);
 
 		app_init();
 
